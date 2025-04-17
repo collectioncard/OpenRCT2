@@ -181,8 +181,8 @@ namespace OpenRCT2::GameActions
     {
         if (gGamePaused == 0)
             return true;
-        if (getGameState().cheats.buildInPauseMode)
-            return true;
+        //if (getGameState().cheats.buildInPauseMode)
+        return true;
         if (actionFlags & GameActions::Flags::AllowWhilePaused)
             return true;
         return false;

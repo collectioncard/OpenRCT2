@@ -139,6 +139,7 @@ GameActions::Result RideEntranceExitPlaceAction::Query() const
 
 GameActions::Result RideEntranceExitPlaceAction::Execute() const
 {
+	//std::cout<<"a0\n";
     // Remember when in unknown station num mode rideIndex is unknown and z is set
     // When in known station num mode rideIndex is known and z is unknown
     const auto errorTitle = _isExit ? STR_CANT_BUILD_MOVE_EXIT_FOR_THIS_RIDE_ATTRACTION
@@ -149,12 +150,14 @@ GameActions::Result RideEntranceExitPlaceAction::Execute() const
         LOG_ERROR("Ride not found for rideIndex %u", _rideIndex.ToUnderlying());
         return GameActions::Result(GameActions::Status::InvalidParameters, errorTitle, STR_ERR_RIDE_NOT_FOUND);
     }
+	//std::cout<<"a1\n";
 
     if (!(GetFlags() & GAME_COMMAND_FLAG_GHOST))
     {
         RideClearForConstruction(*ride);
         ride->removePeeps();
     }
+	//std::cout<<"a2\n";
 
     auto& station = ride->getStation(_stationNum);
     const auto location = _isExit ? station.Exit : station.Entrance;
@@ -170,6 +173,7 @@ GameActions::Result RideEntranceExitPlaceAction::Execute() const
             return result;
         }
     }
+	//std::cout<<"a3\n";
 
     auto z = station.GetBaseZ();
     if (!(GetFlags() & GAME_COMMAND_FLAG_ALLOW_DURING_PAUSED) && !(GetFlags() & GAME_COMMAND_FLAG_GHOST)
@@ -178,6 +182,7 @@ GameActions::Result RideEntranceExitPlaceAction::Execute() const
         FootpathRemoveLitter({ _loc, z });
         WallRemoveAtZ({ _loc, z });
     }
+	//std::cout<<"a4\n";
 
     auto clear_z = z + (_isExit ? RideExitHeight : RideEntranceHeight);
     auto canBuild = MapCanConstructWithClearAt(
@@ -187,7 +192,7 @@ GameActions::Result RideEntranceExitPlaceAction::Execute() const
         canBuild.ErrorTitle = errorTitle;
         return canBuild;
     }
-
+	//std::cout<<"aa\n";
     auto res = GameActions::Result();
     res.Position = { _loc.ToTileCentre(), z };
     res.Expenditure = ExpenditureType::RideConstruction;
@@ -202,6 +207,7 @@ GameActions::Result RideEntranceExitPlaceAction::Execute() const
     entranceElement->SetStationIndex(_stationNum);
     entranceElement->SetRideIndex(_rideIndex);
     entranceElement->SetGhost(GetFlags() & GAME_COMMAND_FLAG_GHOST);
+	//std::cout<<"ab\n";
 
     if (_isExit)
     {
@@ -222,6 +228,7 @@ GameActions::Result RideEntranceExitPlaceAction::Execute() const
     {
         MazeEntranceHedgeRemoval({ _loc, entranceElement->as<TileElement>() });
     }
+	//std::cout<<"ac\n";
 
     FootpathConnectEdges(_loc, entranceElement->as<TileElement>(), GetFlags());
     FootpathUpdateQueueChains();

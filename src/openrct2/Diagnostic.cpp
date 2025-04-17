@@ -60,6 +60,7 @@ void DiagnosticLog(DiagnosticLevel diagnosticLevel, const char* format, ...)
 void DiagnosticLogWithLocation(
     DiagnosticLevel diagnosticLevel, const char* file, const char* function, int32_t line, const char* format, ...)
 {
+	return;
     va_list args;
     char buf[1024];
 
@@ -108,6 +109,7 @@ void DiagnosticLog(DiagnosticLevel diagnosticLevel, const char* format, ...)
 void DiagnosticLogWithLocation(
     DiagnosticLevel diagnosticLevel, const char* file, const char* function, int32_t line, const char* format, ...)
 {
+	return;
     va_list args;
     if (_log_levels[EnumValue(diagnosticLevel)])
     {

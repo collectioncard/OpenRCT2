@@ -17,7 +17,7 @@
 constexpr RideTypeDescriptor FoodStallRTD =
 {
     .Category = RideCategory::shop,
-    .StartTrackPiece = OpenRCT2::TrackElemType::FlatTrack1x1A,
+    .StartTrackPiece = OpenRCT2::TrackElemType::FlatTrack1x1B,
     .TrackPaintFunctions = TrackDrawerDescriptor({
         .trackStyle = TrackStyle::shop,
         .enabledTrackGroups = {},

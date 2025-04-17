@@ -168,13 +168,13 @@ void ScenarioReset(GameState_t& gameState)
 
 static void ScenarioEnd()
 {
-    GameResetSpeed();
+    //GameResetSpeed();
 
     auto* windowMgr = Ui::GetWindowManager();
     windowMgr->CloseByClass(WindowClass::Dropdown);
     windowMgr->CloseAllExceptFlags(WF_STICK_TO_BACK | WF_STICK_TO_FRONT);
 
-    ContextOpenWindowView(WV_PARK_OBJECTIVE);
+    //ContextOpenWindowView(WV_PARK_OBJECTIVE);
 }
 
 /**

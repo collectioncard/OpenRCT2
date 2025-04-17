@@ -158,3 +158,5 @@ namespace OpenRCT2
     void gameStateUpdateLogic();
 
 } // namespace OpenRCT2
+
+extern std::string portAddress2;

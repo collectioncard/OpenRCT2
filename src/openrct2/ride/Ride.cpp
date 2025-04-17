@@ -33,7 +33,7 @@
 #include "../entity/Peep.h"
 #include "../entity/Staff.h"
 #include "../interface/Viewport.h"
-#include "../interface/Window_internal.h"
+#include "../interface/WindowBase.h"
 #include "../localisation/Formatter.h"
 #include "../localisation/Formatting.h"
 #include "../management/Finance.h"
@@ -1364,6 +1364,8 @@ static int32_t getAgePenalty(const Ride& ride)
  */
 static void RideBreakdownUpdate(Ride& ride)
 {
+	return;
+
     auto& gameState = getGameState();
     const auto currentTicks = gameState.currentTicks;
     if (currentTicks & 255)

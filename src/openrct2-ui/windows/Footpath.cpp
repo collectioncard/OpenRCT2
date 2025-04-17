@@ -1597,8 +1597,8 @@ namespace OpenRCT2::Ui::Windows
 
         void KeyboardShortcutDemolishCurrent()
         {
-            if (IsWidgetDisabled(WIDX_REMOVE) || widgets[WIDX_REMOVE].type == WindowWidgetType::Empty
-                || (!getGameState().cheats.buildInPauseMode && GameIsPaused()))
+            if (IsWidgetDisabled(WIDX_REMOVE) || widgets[WIDX_REMOVE].type == WindowWidgetType::Empty)
+            //    || (!GetGameState().cheats.BuildInPauseMode && GameIsPaused()))
             {
                 return;
             }

@@ -286,7 +286,7 @@ bool TitleScene::TryLoadSequence(bool loadPreview)
 {
     if (_loadedTitleSequenceId != _currentSequence || loadPreview)
     {
-        if (_sequencePlayer == nullptr)
+        /*if (_sequencePlayer == nullptr)
         {
             _sequencePlayer = GetContext().GetUiContext()->GetTitleSequencePlayer();
         }
@@ -313,8 +313,11 @@ bool TitleScene::TryLoadSequence(bool loadPreview)
                 targetSequence = (targetSequence + 1) % numSequences;
             } while (targetSequence != _currentSequence && !loadPreview);
         }
+		
         Console::Error::WriteLine("Unable to play any title sequences.");
-        _sequencePlayer->Eject();
+     
+		_sequencePlayer->Eject();
+		*/
         _currentSequence = SIZE_MAX;
         _loadedTitleSequenceId = SIZE_MAX;
         if (!loadPreview)

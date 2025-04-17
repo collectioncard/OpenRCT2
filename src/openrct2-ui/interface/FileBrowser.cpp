@@ -156,7 +156,7 @@ namespace OpenRCT2::Ui::FileBrowser
         switch (type)
         {
             case LoadSaveType::park:
-                return isSave ? "*.park" : "*.park;*.sv6;*.sc6;*.sc4;*.sv4;*.sv7;*.sea";
+                return isSave ? "*.park" : "*.park;*.sv6;*.sc6;*.sc4;*.sv4;*.sv7;*.sea;*.json";
 
             case LoadSaveType::landscape:
                 return isSave ? "*.park" : "*.park;*.sc6;*.sv6;*.sc4;*.sv4;*.sv7;*.sea";
@@ -301,6 +301,12 @@ namespace OpenRCT2::Ui::FileBrowser
                     case (LoadSaveType::track):
                     {
                         SetAndSaveConfigPath(Config::Get().general.LastSaveTrackDirectory, pathBuffer);
+						
+		                const auto withExtension = Path::WithExtension(pathBuffer, ".td6");
+		                String::set(pathBuffer, sizeof(pathBuffer), withExtension.c_str());
+		                RCT2::T6Exporter t6Export{ *trackDesignPtr };
+		                auto success = t6Export.SaveTrack(pathBuffer);
+						
                         auto intent = Intent(WindowClass::InstallTrack);
                         intent.PutExtra(INTENT_EXTRA_PATH, std::string{ pathBuffer });
                         ContextOpenIntent(&intent);

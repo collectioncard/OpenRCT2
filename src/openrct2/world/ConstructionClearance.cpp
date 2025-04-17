@@ -146,7 +146,7 @@ GameActions::Result MapCanConstructWithClearAt(
         return res;
     }
 
-    if (getGameState().cheats.disableClearanceChecks)
+    if (true) //getGameState().cheats.disableClearanceChecks)
     {
         res.SetData(ConstructClearResult{ groundFlags });
         return res;

@@ -228,7 +228,7 @@ namespace OpenRCT2::Config
             model->MultiThreading = reader->GetBoolean("multithreading", true);
 #endif // _DEBUG
             model->TrapCursor = reader->GetBoolean("trap_cursor", false);
-            model->AutoOpenShops = reader->GetBoolean("auto_open_shops", false);
+            model->AutoOpenShops = reader->GetBoolean("auto_open_shops", true);
             model->scenarioSelectMode = reader->GetEnum(
                 "scenario_select_mode", ScenarioSelectMode::origin, Enum_ScenarioSelectMode);
             model->ScenarioUnlockingEnabled = reader->GetBoolean("scenario_unlocking_enabled", true);

@@ -166,6 +166,8 @@ const CommandLineExample CommandLine::kRootExamples[]
 
 exitcode_t CommandLine::HandleCommandDefault()
 {
+	gNetworkStartPort = _port;
+	
     exitcode_t result = EXITCODE_CONTINUE;
 
     if (_about)

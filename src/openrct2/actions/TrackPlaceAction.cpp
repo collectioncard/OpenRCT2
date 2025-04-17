@@ -138,12 +138,12 @@ GameActions::Result TrackPlaceAction::Query() const
 
     if (!(GetActionFlags() & GameActions::Flags::AllowWhilePaused))
     {
-        if (GameIsPaused() && !gameState.cheats.buildInPauseMode)
+        /*if (GameIsPaused() && !GetGameState().Cheats.BuildInPauseMode)
         {
             return GameActions::Result(
                 GameActions::Status::Disallowed, STR_RIDE_CONSTRUCTION_CANT_CONSTRUCT_THIS_HERE,
                 STR_CONSTRUCTION_NOT_POSSIBLE_WHILE_GAME_IS_PAUSED);
-        }
+        }*/
     }
 
     if (!rtd.HasFlag(RtdFlag::isFlatRide))
@@ -194,11 +194,11 @@ GameActions::Result TrackPlaceAction::Query() const
             return GameActions::Result(
                 GameActions::Status::InvalidParameters, STR_RIDE_CONSTRUCTION_CANT_CONSTRUCT_THIS_HERE, STR_OFF_EDGE_OF_MAP);
         }
-        if (!MapIsLocationOwned(tileCoords) && !gameState.cheats.sandboxMode)
-        {
-            return GameActions::Result(
-                GameActions::Status::Disallowed, STR_RIDE_CONSTRUCTION_CANT_CONSTRUCT_THIS_HERE, STR_LAND_NOT_OWNED_BY_PARK);
-        }
+        //if (!MapIsLocationOwned(tileCoords) && !gameState.cheats.sandboxMode)
+        //{
+        //    return GameActions::Result(
+        //        GameActions::Status::Disallowed, STR_RIDE_CONSTRUCTION_CANT_CONSTRUCT_THIS_HERE, STR_LAND_NOT_OWNED_BY_PARK);
+        //}
         numElements++;
     }
 

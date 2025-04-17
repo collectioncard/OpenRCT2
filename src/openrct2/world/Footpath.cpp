@@ -21,7 +21,7 @@
 #include "../entity/EntityList.h"
 #include "../entity/EntityRegistry.h"
 #include "../interface/Viewport.h"
-#include "../interface/Window_internal.h"
+#include "../interface/WindowBase.h"
 #include "../object/FootpathObject.h"
 #include "../object/FootpathRailingsObject.h"
 #include "../object/FootpathSurfaceObject.h"
@@ -1805,7 +1805,7 @@ void FootpathRemoveEdgesAt(const CoordsXY& footpathPos, TileElement* tileElement
         tileElement->AsPath()->SetEdgesAndCorners(0);
 }
 
-static ObjectEntryIndex FootpathGetDefaultSurface(bool queue)
+ObjectEntryIndex FootpathGetDefaultSurface(bool queue)
 {
     bool showEditorPaths = (gLegacyScene == LegacyScene::scenarioEditor || getGameState().cheats.sandboxMode);
     for (ObjectEntryIndex i = 0; i < kMaxFootpathSurfaceObjects; i++)

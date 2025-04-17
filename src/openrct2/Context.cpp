@@ -7,6 +7,17 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
+#define ZMQ_BUILD_DRAFT_API
+#include "zmq.hpp"
+
+using namespace std::chrono_literals;
+
+// initialize the zmq context with a single IO thread
+zmq::context_t context{1};
+
+// construct a REP (reply) socket and bind to interface
+zmq::socket_t socket{context, zmq::socket_type::client};
+
 #ifdef __EMSCRIPTEN__
     #include <cassert>
     #include <emscripten.h>
@@ -75,6 +86,26 @@
 #include "world/MapAnimation.h"
 #include "world/Park.h"
 
+#include "object/TerrainEdgeObject.h"
+#include "object/TerrainSurfaceObject.h"
+#include "json/json.h"
+#include "ride/Ride.h"
+#include "ride/RideData.h"
+#include "world/Scenery.h"
+#include "world/Entrance.h"
+#include "ride/Ride.h"
+#include "rct2/T6Exporter.h"
+
+#include "world/tile_element/SurfaceElement.h"
+#include "world/tile_element/PathElement.h"
+#include "world/tile_element/TrackElement.h"
+#include "world/tile_element/WallElement.h"
+#include "world/tile_element/SmallSceneryElement.h"
+#include "world/tile_element/LargeSceneryElement.h"
+#include "world/tile_element/EntranceElement.h"
+#include "ride/RideManager.hpp"
+//#include "world/Surface.h"
+
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -82,6 +113,7 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <sstream>
 
 using namespace OpenRCT2;
 using namespace OpenRCT2::Drawing;
@@ -709,7 +741,7 @@ namespace OpenRCT2
             ContextOpenIntent(&intent);
         }
 
-        bool LoadParkFromFile(const u8string& path, bool loadTitleScreenOnFail = false, bool asScenario = false) final override
+        bool LoadParkFromFile(const u8string& path, bool loadTitleScreenOnFail = false, bool asScenario = false, bool sendOverSocket = true) final override
         {
             LOG_VERBOSE("Context::LoadParkFromFile(%s)", path.c_str());
 
@@ -727,7 +759,7 @@ namespace OpenRCT2
                 }
             } crash_additional_file_registration(path);
 
-            try
+            //try
             {
                 if (String::iequals(Path::GetExtension(path), ".sea"))
                 {
@@ -745,9 +777,563 @@ namespace OpenRCT2
                 {
                     return false;
                 }
+				
+			    Json::Value event;
+				
+			    auto& gameState = OpenRCT2::getGameState();
+				event["map_size"]["x"] = gameState.mapSize.x;
+				event["map_size"]["y"] = gameState.mapSize.y;
+				event["park_size"] = gameState.park.Size;
+				event["scenario_type"] = gameState.scenarioObjective.Type;
+				event["objective_num_months"] = MONTH_COUNT * gameState.scenarioObjective.Year;
+				event["objective_num_guests"] = gameState.scenarioObjective.NumGuests;
+				event["free_entry"] = gameState.park.Flags & PARK_FLAGS_PARK_FREE_ENTRY;
+				event["flags"] = gameState.park.Flags;
+				
+				//std::cout<<"start\n";
+				
+				//event["spawns"] = 
+				for (auto& spawn : gameState.peepSpawns)
+				{
+					Json::Value spawn_j;
+					spawn_j["x"] = spawn.x;
+					spawn_j["y"] = spawn.y;
+					spawn_j["z"] = spawn.z;
+					spawn_j["direction"] = spawn.direction;
+					event["spawns"].append(spawn_j);
+				}
+				
+				for (auto& spawn : gameState.park.Entrances)
+				{
+					Json::Value spawn_j;
+					spawn_j["x"] = spawn.x;
+					spawn_j["y"] = spawn.y;
+					spawn_j["z"] = spawn.z;
+					spawn_j["direction"] = spawn.direction;
+					event["entrances"].append(spawn_j);
+				}
+				
+			    auto& objectMgr = OpenRCT2::GetContext()->GetObjectManager();
+				
+				std::set<Json::Value> objectIDs;
+				std::set<Json::Value> legacyObjectIDs;
+				
+				// rides
+	            for (auto& ride : GetRideManager())
+				{
+					if (ride.status == RideStatus::closed)
+					{
+						continue;
+					}
+					Json::Value ride_j;
+					
+					ride_j["type"] = ride.type;
+				    auto obj = static_cast<RideObject*>(objectMgr.GetLoadedObject(ObjectType::ride, ride.subtype));
+					if (obj != nullptr)
+					{
+						ride_j["subtype_obj_id"] = std::string(obj->GetIdentifier());
+						ride_j["subtype_obj_id_legacy"] = std::string(obj->GetLegacyIdentifier());
+					}
+					ride_j["mode"] = static_cast<uint8_t>(ride.mode);					
+					ride_j["name"] = ride.getName();
+					
+					//ride_j["subtype"] = ride->subtype;
+					
+
+		            for (StationIndex::UnderlyingType s = 0; s < Limits::kMaxStationsPerRide; s++)
+		            {
+		                StationIndex stationIndex = StationIndex::FromUnderlying(s);
+		                auto& station = ride.getStation(stationIndex);
+						
+						Json::Value station_j;
+		                if (station.Start.IsNull() && station.Entrance.IsNull() && station.Exit.IsNull())
+						{
+							continue;
+						}
+
+		                if (station.Start.IsNull())
+		                {
+							station_j["station_start"] = "null";
+		                }
+		                else
+		                {
+							station_j["station_start_x"] = station.Start.x;
+							station_j["station_start_y"] = station.Start.y;
+		                }
+		                station_j["Height"] = station.Height;
+		                station_j["Length"] = station.Length;
+		                station_j["Depart"] = station.Depart;
+
+		                if (station.Entrance.IsNull())
+							station_j["entrance"] = "null";
+		                else
+						{
+							station_j["entrance_pos"]["x"] = station.Entrance.x;// station->entrances[i].x;
+							station_j["entrance_pos"]["y"] = station.Entrance.z;//->entrances[i].y;
+							station_j["entrance_pos"]["z"] = station.Entrance.z;//->station_heights[i];
+						}
+
+		                if (station.Exit.IsNull())
+							station_j["exit"] = "null";
+		                else
+						{
+							station_j["exit_pos"]["x"] = station.Exit.x;//->exits[i].x;
+							station_j["exit_pos"]["y"] = station.Exit.y;//->exits[i].y;
+							station_j["exit_pos"]["z"] = station.Exit.z;//->station_heights[i];
+						}
+						ride_j["stations"].append(station_j);
+					}
+					
+					// save track design, if applicable.
+					/*
+				    TrackDesignState tds{};
+					std::string trackFile = "none";
+				    auto _trackDesign = ride->SaveToTrackDesign(tds);
+				    if (!_trackDesign)
+				    {
+						std::cout<<"cant get design for ride\n";
+				        //return;
+				    }
+					//else if (curRide->custom_name != "Test")
+					else
+					{
+				        auto errMessage = _trackDesign->CreateTrackDesignScenery(tds);
+				        if (errMessage != STR_NONE)
+				        {
+				            context_show_error(STR_CANT_SAVE_TRACK_DESIGN, errMessage, {});
+							std::cout<<"cant save1\n";
+				        }
+						//}
+						else
+						{
+						    char pathBuffer[100];
+							// todo: add cur time in seconds to string plus random number
+							auto randomNumber = scenario_rand() % 100;
+							
+					        std::stringstream stream;
+							stream << "exported/" << gScenarioName << "-...-" << ride->GetName() << "-...-" << randomNumber << ".td6";
+						    std::string withExtension = stream.str(); //  "export.td6"; // Path::WithExtension(, "td6");
+						    String::Set(pathBuffer, sizeof(pathBuffer), withExtension.c_str());
+
+						    RCT2::T6Exporter t6Export{ _trackDesign.get() };
+
+						    auto success = t6Export.SaveTrack(pathBuffer);
+
+						    if (!success)
+						    {
+								std::cout<<"err saving\n";
+						    }
+							else
+							{
+								trackFile = withExtension;
+								std::cout<<"success saving ride\n";
+							}
+						}
+					}
+					ride_j["track_file"] = trackFile;
+					*/
+					event["rides"].append(ride_j);
+				}
+				
+			    TileElementIterator iter;
+			    TileElementIteratorBegin(&iter);
+			    do
+			    {
+					// check if surface is owned or not.
+					bool owned = false;
+					auto surface = MapGetSurfaceElementAt(TileCoordsXY{ iter.x, iter.y });
+					if ((surface->GetOwnership() & OWNERSHIP_OWNED) || (surface->GetOwnership() & OWNERSHIP_CONSTRUCTION_RIGHTS_OWNED))
+						owned = true;
+					
+					/*
+				    TileElementIterator cur_iter;
+					cur_iter.x = iter.x;
+					cur_iter.y = iter.y;
+			        cur_iter.element = MapGetFirstElementAt(TileCoordsXY{ iter.x, iter.y });
+					do {
+						TileElement* cur_element = cur_iter.element;
+						if (cur_element->GetType() == TileElementType::Surface)
+						{
+							auto surfaceEl = cur_element->AsSurface();
+							if ((surfaceEl->GetOwnership() & OWNERSHIP_OWNED))
+							{
+								owned = true;
+							}
+							break;
+						}
+					} while(!(cur_iter.element++)->IsLastForTile());
+					
+					if (cur_iter.x == iter.x and cur_iter.y == iter.y and !owned)
+					{
+						continue;
+					}*/
+					
+					TileElement* element = iter.element;
+					
+					if (element->GetBaseZ() == 16 && element->GetType() == TileElementType::Surface)
+					{
+						continue;
+						//auto surfaceEl = iter.element->AsSurface();
+						//if (surfaceEl->GetOwnership() & OWNERSHIP_OWNED)
+						//	continue; // if owned, skip
+					}
+					if (element->GetType() == TileElementType::Banner)
+					{
+						continue;
+					}
+	
+					std::string x, y, z;
+
+					x = std::to_string(iter.x);
+					y = std::to_string(iter.y);
+					
+					auto sz = event["map"][x][y].size();
+					
+					Json::Value cur_field;
+					cur_field["type"] = static_cast<uint8_t>(element->GetType());
+					cur_field["direction"] = static_cast<uint8_t>(element->GetDirection());
+					cur_field["base_z"] = static_cast<int32_t>(element->GetBaseZ());
+					cur_field["clearance_z"] = static_cast<int32_t>(element->GetClearanceZ());
+					cur_field["quadrants"] = static_cast<uint8_t>(element->GetOccupiedQuadrants());
+					cur_field["owned"] = owned;
+					//cur_field["owned_by_park"] = map_is_location_owned_or_has_rights(CoordsXY({iter.x, iter.y})); // bool
+	
+					switch(iter.element->GetType()) // uint8_t
+					{
+					    case TileElementType::Surface:
+						{ // Surface.cpp
+							//std::cout<<"1\n";
+			                
+							auto surfaceEl = iter.element->AsSurface();
+							
+							cur_field["slope"] = static_cast<uint8_t>(surfaceEl->GetSlope());
+							//if (surfaceEl->GetOwnership() & OWNERSHIP_OWNED)
+							//	cur_field["owned_by_park"] = true;
+							//else cur_field["owned_by_park"] = false;
+							
+			                auto surfaceIndex = surfaceEl->GetSurfaceObjectIndex(); //Style(); // uint32_t
+			                auto edgeIndex = surfaceEl->GetEdgeObjectIndex(); //Style(); // uint32_t
+							//cur_field["surface_style"] = surfaceIndex;
+							//cur_field["edge_style"] = edgeIndex;
+							
+					        auto surfaceObj = static_cast<TerrainSurfaceObject*>(objectMgr.GetLoadedObject(ObjectType::terrainSurface, surfaceIndex));
+					        auto edgeObj = static_cast<TerrainEdgeObject*>(objectMgr.GetLoadedObject(ObjectType::terrainEdge, edgeIndex));
+							
+							if (surfaceObj != nullptr)
+							{
+								cur_field["surface_obj_id"] = std::string(surfaceObj->GetIdentifier());
+								cur_field["surface_obj_id_legacy"] = std::string(surfaceObj->GetLegacyIdentifier());
+								
+								Json::Value id;
+								id["id"] = std::string(surfaceObj->GetIdentifier());
+								id["type"] = static_cast<uint8_t>(ObjectType::terrainSurface);
+								objectIDs.insert(id);
+								
+								Json::Value lId;
+								lId["id"] = std::string(surfaceObj->GetLegacyIdentifier());
+								lId["type"] = static_cast<uint8_t>(ObjectType::terrainSurface);
+								legacyObjectIDs.insert(lId);
+							}
+							if (edgeObj != nullptr)
+							{
+								cur_field["edge_obj_id"] = std::string(edgeObj->GetIdentifier());
+								cur_field["edge_obj_id_legacy"] = std::string(edgeObj->GetLegacyIdentifier());
+								
+								Json::Value id;
+								id["id"] = std::string(edgeObj->GetIdentifier());
+								id["type"] = static_cast<uint8_t>(ObjectType::terrainEdge);
+								objectIDs.insert(id);
+								
+								Json::Value lId;
+								lId["id"] = std::string(edgeObj->GetLegacyIdentifier());
+								lId["type"] = static_cast<uint8_t>(ObjectType::terrainEdge);
+								legacyObjectIDs.insert(lId);
+							}
+							cur_field["water_height"] = static_cast<int32_t>(surfaceEl->GetWaterHeight());
+			
+							break;
+						}
+					    case TileElementType::Path:
+						{
+							//std::cout<<"2\n";
+							
+							auto pathEl = iter.element->AsPath();
+							
+							auto footpathObj = pathEl->GetLegacyPathEntry();
+							if (footpathObj == nullptr)
+							{
+								cur_field["legacy"] = false;
+								auto surfaceEntryIndex = pathEl->GetSurfaceEntryIndex();
+								auto railingEntryIndex = pathEl->GetRailingsEntryIndex();
+							    auto surfaceObj = objectMgr.GetLoadedObject(ObjectType::footpathSurface, surfaceEntryIndex);
+							    auto railingObj = objectMgr.GetLoadedObject(ObjectType::footpathRailings, railingEntryIndex);
+								//cur_field["surface_entry_index"] = surfaceEntryIndex;
+								//cur_field["railing_entry_index"] = railingEntryIndex;
+								if (surfaceObj != nullptr)
+								{
+									cur_field["surface_obj_id"] = std::string(surfaceObj->GetIdentifier());
+									cur_field["surface_obj_id_legacy"] = std::string(surfaceObj->GetLegacyIdentifier());
+									
+									Json::Value id;
+									id["id"] = std::string(surfaceObj->GetIdentifier());
+									id["type"] = static_cast<uint8_t>(ObjectType::footpathSurface);
+									objectIDs.insert(id);
+								
+									//Json::Value lId;
+									//lId["id"] = std::string(surfaceObj->GetLegacyIdentifier());
+									//lId["type"] = static_cast<uint8_t>(element->GetType());;
+									//legacyObjectIDs.insert(lId);
+								}
+								if (railingObj != nullptr)
+								{
+									cur_field["railing_obj_id"] = std::string(railingObj->GetIdentifier());
+									cur_field["railing_obj_id_legacy"] = std::string(railingObj->GetLegacyIdentifier());
+									
+									Json::Value id;
+									id["id"] = std::string(railingObj->GetIdentifier());
+									id["type"] = static_cast<uint8_t>(ObjectType::footpathRailings);
+									objectIDs.insert(id);
+								
+									//Json::Value lId;
+									//lId["id"] = std::string(railingObj->GetLegacyIdentifier());
+									//lId["type"] = static_cast<uint8_t>(element->GetType());;
+									//legacyObjectIDs.insert(lId);
+								}
+							}
+							else
+							{
+								cur_field["legacy"] = true;
+								//cur_field["entry_index"] = pathEl->GetLegacyPathEntryIndex();
+								// TODO
+							}
+							
+							cur_field["sloped"] = pathEl->IsSloped();
+							cur_field["slope_direction"] = pathEl->GetSlopeDirection();
+							cur_field["queue"] = pathEl->IsQueue(); // bool
+							cur_field["ride_index"] = pathEl->GetRideIndex().ToUnderlying();
+							cur_field["station_index"] = pathEl->GetStationIndex().ToUnderlying();
+							cur_field["edges"] = pathEl->GetEdges();
+							
+							break;
+						}
+					    case TileElementType::Track:
+						{
+							//std::cout<<"3\n";
+							
+							auto trackEl = iter.element->AsTrack();
+							auto rideIndex = trackEl->GetRideIndex(); // RideId -> TIdentifier<uint16_t, std::numeric_limits<uint16_t>::max(), struct RideIdTag>;
+			
+							Ride* ride = GetRide(rideIndex);
+							cur_field["ride_name"] = ride->getName();
+							cur_field["ride_type"] = ride->type;
+							cur_field["track_type"] = static_cast<uint16_t>(trackEl->GetTrackType()); // track_type_t -> uint16_t
+							cur_field["sequence_index"] = trackEl->GetSequenceIndex();
+							cur_field["ride_index"] = static_cast<uint16_t>(trackEl->GetRideIndex().ToUnderlying());
+							cur_field["has_chain"] = trackEl->HasChain();
+							cur_field["has_cable_lift"] = trackEl->HasCableLift();
+							cur_field["is_inverted"] = trackEl->IsInverted();
+							cur_field["station_index"] = static_cast<uint8_t>(trackEl->GetStationIndex().ToUnderlying());
+							
+							cur_field["excitement"] = ride->ratings.excitement;
+							cur_field["intensity"] = ride->ratings.intensity;
+							cur_field["nausea"] = ride->ratings.nausea;
+							
+							//auto name_string_id = ride->GetRideTypeDescriptor().Naming.Name;
+						    //Formatter ft;
+						    //auto titlez = format_string(name_string_id, ft.Data());
+							//cur_field["default_ride_name"] = titlez;
+										
+						    auto obj = static_cast<RideObject*>(objectMgr.GetLoadedObject(ObjectType::ride, ride->subtype));
+							if (obj != nullptr)
+							{
+								cur_field["subtype_obj_id"] = std::string(obj->GetIdentifier());
+								cur_field["subtype_obj_id_legacy"] = std::string(obj->GetLegacyIdentifier());
+								
+								Json::Value id;
+								id["id"] = std::string(obj->GetIdentifier());
+								id["type"] = static_cast<uint8_t>(ObjectType::ride);
+								objectIDs.insert(id);
+								
+								Json::Value lId;
+								lId["id"] = std::string(obj->GetLegacyIdentifier());
+								lId["type"] = static_cast<uint8_t>(ObjectType::ride);
+								legacyObjectIDs.insert(lId);
+							}
+							
+				            auto ride_entry = GetRideEntryByIndex(ride->subtype);
+				            if (ride_entry != nullptr)
+							{
+					            if (ride_entry->shop_item[1] != ShopItem::None)
+					            {
+					                money16 price = ride->price[1];
+									ShopItem shop_item = ride_entry->shop_item[1];
+									cur_field["shop_item_price_1"] = price;
+									cur_field["shop_item_type_1"] = static_cast<uint8_t>(shop_item);
+					            }
+					            if (ride_entry->shop_item[0] != ShopItem::None)
+					            {
+					                money16 price = ride->price[0];
+									ShopItem shop_item = ride_entry->shop_item[0];
+									cur_field["shop_item_price_0"] = price;
+									cur_field["shop_item_type_0"] = static_cast<uint8_t>(shop_item);
+					            }
+							}
+							
+							break;
+						}
+					    case TileElementType::SmallScenery:
+						{
+							//std::cout<<"4\n";
+
+							auto sceneryEl = iter.element->AsSmallScenery();			
+							auto entryIndex = sceneryEl->GetEntryIndex(); // ObjectEntryIndex
+						    auto obj = objectMgr.GetLoadedObject(ObjectType::smallScenery, entryIndex);
+							if (obj != nullptr)
+							{
+								cur_field["obj_id"] = std::string(obj->GetIdentifier());
+								cur_field["obj_id_legacy"] = std::string(obj->GetLegacyIdentifier());
+								
+								Json::Value id;
+								id["id"] = std::string(obj->GetIdentifier());
+								id["type"] = static_cast<uint8_t>(ObjectType::smallScenery);
+								objectIDs.insert(id);
+								
+								Json::Value lId;
+								lId["id"] = std::string(obj->GetLegacyIdentifier());
+								lId["type"] = static_cast<uint8_t>(ObjectType::smallScenery);
+								legacyObjectIDs.insert(lId);
+							}
+							//cur_field["entry_index"] = sceneryEl->GetEntryIndex();
+							cur_field["scenery_quadrant"] = sceneryEl->GetSceneryQuadrant();
+							cur_field["primary_colour"] = sceneryEl->GetPrimaryColour();
+							cur_field["secondary_colour"] = sceneryEl->GetSecondaryColour();
+							
+							break;
+						}
+					    case TileElementType::Entrance:
+						{
+							auto entranceEl = iter.element->AsEntrance();
+			
+							cur_field["entranceType"] = entranceEl->GetEntranceType();
+							cur_field["station_index"] = static_cast<uint8_t>(entranceEl->GetStationIndex().ToUnderlying());
+							cur_field["sequence_index"] = entranceEl->GetSequenceIndex();
+			
+							auto rideIndex = entranceEl->GetRideIndex();
+							cur_field["ride_index"] = static_cast<uint16_t>(rideIndex.ToUnderlying());
+
+							Ride* ride = GetRide(rideIndex);
+							if (ride != nullptr)
+							{
+								cur_field["ride_name"] = ride->getName();
+								cur_field["ride_type"] = ride->type;
+								cur_field["excitement"] = ride->ratings.excitement;
+								cur_field["intensity"] = ride->ratings.intensity;
+								cur_field["nausea"] = ride->ratings.nausea;
+							}
+							break;
+						}
+					    case TileElementType::Wall:
+						{
+							//std::cout<<"5\n";
+							
+							auto wallEl = iter.element->AsWall();			
+							auto entryIndex = wallEl->GetEntryIndex(); // ObjectEntryIndex
+						    auto obj = objectMgr.GetLoadedObject(ObjectType::walls, entryIndex);
+							
+							if (obj != nullptr)
+							{
+								cur_field["obj_id"] = std::string(obj->GetIdentifier());
+								cur_field["obj_id_legacy"] = std::string(obj->GetLegacyIdentifier());
+								
+								Json::Value id;
+								id["id"] = std::string(obj->GetIdentifier());
+								id["type"] = static_cast<uint8_t>(ObjectType::walls);
+								objectIDs.insert(id);
+								
+								Json::Value lId;
+								lId["id"] = std::string(obj->GetLegacyIdentifier());
+								lId["type"] = static_cast<uint8_t>(ObjectType::walls);
+								legacyObjectIDs.insert(lId);
+							}
+							//cur_field["entry_index"] = wallEl->GetEntryIndex();
+							cur_field["slope"] = static_cast<uint8_t>(wallEl->GetSlope());
+							cur_field["primary_colour"] = wallEl->GetPrimaryColour();
+							cur_field["secondary_colour"] = wallEl->GetSecondaryColour();
+							cur_field["tertiary_colour"] = wallEl->GetTertiaryColour();
+							
+							break;
+						}
+					    case TileElementType::LargeScenery:
+						{
+							//std::cout<<"6\n";
+
+							auto sceneryEl = iter.element->AsLargeScenery();			
+							auto entryIndex = sceneryEl->GetEntryIndex(); // ObjectEntryIndex
+						    auto obj = objectMgr.GetLoadedObject(ObjectType::largeScenery, entryIndex);
+							
+							if (obj != nullptr)
+							{
+								cur_field["obj_id"] = std::string(obj->GetIdentifier());
+								cur_field["obj_id_legacy"] = std::string(obj->GetLegacyIdentifier());
+								
+								Json::Value id;
+								id["id"] = std::string(obj->GetIdentifier());
+								id["type"] = static_cast<uint8_t>(ObjectType::largeScenery);
+								objectIDs.insert(id);
+								
+								Json::Value lId;
+								lId["id"] = std::string(obj->GetLegacyIdentifier());
+								lId["type"] = static_cast<uint8_t>(ObjectType::largeScenery);
+								legacyObjectIDs.insert(lId);
+							}
+							//cur_field["entry_index"] = sceneryEl->GetEntryIndex();
+							cur_field["sequence_index"] = sceneryEl->GetSequenceIndex();
+							cur_field["primary_colour"] = sceneryEl->GetPrimaryColour();
+							cur_field["secondary_colour"] = sceneryEl->GetSecondaryColour();
+							
+							break;
+						}
+					    case TileElementType::Banner:
+						{
+							// TODO
+							//auto banner = iter.element->AsBanner();
+							//auto banner2 = banner->GetBanner();
+						    //auto obj = objectMgr.GetLoadedObject(ObjectType::Banners, banner->type);
+							//cur_field["obj_id"] = std::string(obj->GetIdentifier());
+							//cur_field["obj_id_legacy"] = std::string(obj->GetLegacyIdentifier());
+							//break;
+						}
+					}
+			
+			    	event["map"][x][y].append(cur_field);
+				} while (TileElementIteratorNext(&iter));
+				
+				for (auto &id : objectIDs)
+					event["object_ids"].append(id);
+				
+				for (auto &id : legacyObjectIDs)
+					event["legacy_object_ids"].append(id);
+				
+				if (sendOverSocket)
+				{
+					std::cout<<"trying to send\n";
+				    Json::StyledWriter styledWriter;
+					socket.connect(portAddress2);
+					socket.send(zmq::buffer(styledWriter.write(event)), zmq::send_flags::none);
+					socket.disconnect(portAddress2);
+				}
+				//std::cout<<"sent json\n";
+				
+				/*
+				std::ofstream park_file;
+				park_file.open("park.json");
+				park_file << styledWriter.write(event);
+				park_file.close();
+				*/
+				
                 return true;
             }
-            catch (const std::exception& e)
+            /*catch (const std::exception& e)
             {
                 Console::Error::WriteLine(e.what());
                 if (loadTitleScreenOnFail)
@@ -755,8 +1341,17 @@ namespace OpenRCT2
                     SetActiveScene(GetTitleScene());
                 }
                 auto windowManager = _uiContext->GetWindowManager();
+				
+				std::cout <<" error loading ***:" << e.what() << "\n";
+				
+				socket.connect(portAddress2);
+				const std::string error{e.what()};
+				socket.send(zmq::buffer(error), zmq::send_flags::none);
+				socket.disconnect(portAddress2);
+				//std::cout<<"sent error\n";
+			
                 windowManager->ShowError(STR_FAILED_TO_LOAD_FILE_CONTAINS_INVALID_DATA, kStringIdNone, {});
-            }
+            }*/
             return false;
         }
 
@@ -766,19 +1361,31 @@ namespace OpenRCT2
         {
             try
             {
+				bool jsonType = false;
                 ClassifiedFileInfo info;
-                if (!TryClassifyFile(stream, &info))
-                {
-                    throw std::runtime_error("Unable to detect file type");
-                }
+                if (String::equals(Path::GetExtension(path).c_str(), ".json", true))
+				{
+					//std::cout<<"json file\n";
+					jsonType = true;
+				}
+				else
+				{
+	                if (!TryClassifyFile(stream, &info))
+	                {
+	                    throw std::runtime_error("Unable to detect file type");
+	                }
 
-                if (info.Type != FileType::park && info.Type != FileType::savedGame && info.Type != FileType::scenario)
-                {
-                    throw std::runtime_error("Invalid file type.");
-                }
-
+	                if (info.Type != FileType::park && info.Type != FileType::savedGame && info.Type != FileType::scenario)
+	                {
+	                    throw std::runtime_error("Invalid file type.");
+	                }
+				}
                 std::unique_ptr<IParkImporter> parkImporter;
-                if (info.Type == FileType::park)
+				if (jsonType)
+				{
+					parkImporter = ParkImporter::CreateJson(*_objectRepository);
+				}
+                else if (info.Type == FileType::park)
                 {
                     parkImporter = ParkImporter::CreateParkFile(*_objectRepository);
                 }
@@ -799,7 +1406,7 @@ namespace OpenRCT2
                 OpenProgress(asScenario ? STR_LOADING_SCENARIO : STR_LOADING_SAVED_GAME);
                 SetProgress(0, 100, STR_STRING_M_PERCENT);
 
-                auto result = parkImporter->LoadFromStream(stream, info.Type == FileType::scenario, false, path.c_str());
+                auto result = parkImporter->LoadFromStream(stream, !jsonType && info.Type == FileType::scenario, false, path.c_str());
                 SetProgress(10, 100, STR_STRING_M_PERCENT);
 
                 // From this point onwards the currently loaded park will be corrupted if loading fails
@@ -830,7 +1437,7 @@ namespace OpenRCT2
 #ifndef DISABLE_NETWORK
                 bool sendMap = false;
 #endif
-                if (!asScenario && (info.Type == FileType::park || info.Type == FileType::savedGame))
+                if (!asScenario && (jsonType || info.Type == FileType::park || info.Type == FileType::savedGame))
                 {
 #ifndef DISABLE_NETWORK
                     if (_network.GetMode() == NETWORK_MODE_CLIENT)
@@ -897,6 +1504,7 @@ namespace OpenRCT2
             catch (const ObjectLoadException& e)
             {
                 Console::Error::WriteLine("Unable to open park: missing objects");
+				std::cout <<" error loading D:" << e.what() << "\n";
 
                 // If loading the SV6 or SV4 failed return to the title screen if requested.
                 if (loadTitleScreenFirstOnFail)
@@ -912,10 +1520,18 @@ namespace OpenRCT2
 
                 auto windowManager = _uiContext->GetWindowManager();
                 windowManager->OpenIntent(&intent);
+				
+				socket.connect(portAddress2);
+				const std::string error{e.what()};
+				socket.send(zmq::buffer(error), zmq::send_flags::none);
+				socket.disconnect(portAddress2);
+				//std::cout<<"sent error\n";
+				
             }
-            catch (const UnsupportedRideTypeException&)
+            catch (const UnsupportedRideTypeException& e)
             {
                 Console::Error::WriteLine("Unable to open park: unsupported ride types");
+				std::cout <<" error loading C:" << e.what() << "\n";
 
                 // If loading the SV6 or SV4 failed return to the title screen if requested.
                 if (loadTitleScreenFirstOnFail)
@@ -923,11 +1539,18 @@ namespace OpenRCT2
                     SetActiveScene(GetTitleScene());
                 }
                 auto windowManager = _uiContext->GetWindowManager();
-                windowManager->ShowError(STR_FILE_CONTAINS_UNSUPPORTED_RIDE_TYPES, kStringIdNone, {});
+				windowManager->ShowError(STR_FILE_CONTAINS_UNSUPPORTED_RIDE_TYPES, kStringIdNone, {});
+				
+				socket.connect(portAddress2);
+				const std::string error{e.what()};
+				socket.send(zmq::buffer(error), zmq::send_flags::none);
+				socket.disconnect(portAddress2);
+				//std::cout<<"sent error\n";				
             }
             catch (const UnsupportedVersionException& e)
             {
                 Console::Error::WriteLine("Unable to open park: unsupported park version");
+				std::cout <<" error loading B:" << e.what() << "\n";
 
                 if (loadTitleScreenFirstOnFail)
                 {
@@ -956,16 +1579,31 @@ namespace OpenRCT2
                         windowManager->ShowError(STR_ERROR_PARK_VERSION_TITLE, STR_ERROR_PARK_VERSION_TOO_NEW_MESSAGE, ft);
                     }
                 }
+				
+				socket.connect(portAddress2);
+				const std::string error{e.what()};
+				socket.send(zmq::buffer(error), zmq::send_flags::none);
+				socket.disconnect(portAddress2);
+				//std::cout<<"sent error\n";
+				
             }
-            catch (const std::exception& e)
+            /*catch (const std::exception& e)
             {
+				std::cout <<" error loading A:" << e.what() << "\n";
+
                 // If loading the SV6 or SV4 failed return to the title screen if requested.
                 if (loadTitleScreenFirstOnFail)
                 {
                     SetActiveScene(GetTitleScene());
                 }
                 Console::Error::WriteLine(e.what());
-            }
+				
+				socket.connect(portAddress2);
+				const std::string error{e.what()};
+				socket.send(zmq::buffer(error), zmq::send_flags::none);
+				socket.disconnect(portAddress2);
+				//std::cout<<"sent error\n";
+            }*/
 
             CloseProgress();
             WindowSetFlagForAllViewports(VIEWPORT_FLAG_RENDERING_INHIBITED, false);
@@ -1091,21 +1729,23 @@ namespace OpenRCT2
                     }
                     else
                     {
-                        try
+                       // try
                         {
-                            if (!LoadParkFromFile(gOpenRCT2StartupActionPath, true))
+                            if (!LoadParkFromFile(gOpenRCT2StartupActionPath, true, true, false))
                             {
+								std::cout<<" couldn't load file\n";
                                 nextScene = GetTitleScene();
                                 break;
                             }
                         }
-                        catch (const std::exception& ex)
+                        /*catch (const std::exception& ex)
                         {
                             Console::Error::WriteLine("Failed to load '%s'", gOpenRCT2StartupActionPath);
                             Console::Error::WriteLine("%s", ex.what());
+							std::cout<<"error: " << ex.what()<< "\n";
                             nextScene = GetTitleScene();
                             break;
-                        }
+                        }*/
                     }
 
                     // Successfully loaded a file
@@ -1143,6 +1783,7 @@ namespace OpenRCT2
 
         void InitNetworkGame(bool isGameScene)
         {
+			std::cout<<"\n\ninit network game\n\n";
             if (isGameScene)
             {
 #ifndef DISABLE_NETWORK
