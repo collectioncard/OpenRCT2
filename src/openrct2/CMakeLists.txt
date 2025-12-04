@@ -175,9 +175,36 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 target_link_libraries(libopenrct2 Threads::Threads)
 
-target_include_directories(libopenrct2 SYSTEM PRIVATE "/opt/homebrew/include")
-include_directories("/opt/homebrew/include")
-target_link_libraries(libopenrct2 libzmq)
+# Locate libzmq (ZeroMQ) and its include dir. Prefer Homebrew locations on macOS,
+# but search common system locations as fallback. This avoids hardcoding / duplicate
+# linking to libzmq which caused linker failures on macOS (duplicate/ambiguous libs).
+find_path(LIBZMQ_INCLUDE_DIR NAMES zmq.h
+    PATHS /opt/homebrew/include /usr/local/include /usr/include
+    NO_DEFAULT_PATH)
+
+find_library(LIBZMQ_LIBRARY NAMES zmq libzmq
+    PATHS /opt/homebrew/lib /usr/local/lib /usr/lib
+    NO_DEFAULT_PATH)
+
+if (NOT LIBZMQ_LIBRARY)
+    message(FATAL_ERROR "libzmq not found; install zeromq (libzmq) or set LIBZMQ_LIBRARY")
+endif()
+
+# Prefer using the libfind processed variables (LIBZMQ_INCLUDE_DIRS, LIBZMQ_LIBRARIES)
+# so that any additional libs (e.g., libsodium) get included when needed.
+if (DEFINED LIBZMQ_INCLUDE_DIRS)
+    target_include_directories(libopenrct2 SYSTEM PRIVATE ${LIBZMQ_INCLUDE_DIRS})
+elseif (LIBZMQ_INCLUDE_DIR)
+    target_include_directories(libopenrct2 SYSTEM PRIVATE ${LIBZMQ_INCLUDE_DIR})
+else()
+    target_include_directories(libopenrct2 SYSTEM PRIVATE "/opt/homebrew/include")
+endif()
+
+if (DEFINED LIBZMQ_LIBRARIES)
+    target_link_libraries(libopenrct2 ${LIBZMQ_LIBRARIES})
+else()
+    target_link_libraries(libopenrct2 ${LIBZMQ_LIBRARY})
+endif()
 
 # For some reason, these flags break the check for pthreads. Add them after.
 if (EMSCRIPTEN)
@@ -234,9 +261,6 @@ if (HAVE_DISCORD_RPC)
         target_link_libraries(libopenrct2 discord-rpc)
     endif()
 endif()
-
-target_include_directories(libopenrct2 SYSTEM PRIVATE ${LIBZMQ_INCLUDE_DIR})
-target_link_libraries(libopenrct2 /usr/local/lib/libzmq.a)
 
 # Includes
 target_include_directories(libopenrct2 SYSTEM PRIVATE ${LIBZIP_INCLUDE_DIRS})

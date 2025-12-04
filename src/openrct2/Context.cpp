@@ -1317,6 +1317,7 @@ namespace OpenRCT2
 				if (sendOverSocket)
 				{
 					std::cout<<"trying to send\n";
+				        ;
 				    Json::StyledWriter styledWriter;
 					socket.connect(portAddress2);
 					socket.send(zmq::buffer(styledWriter.write(event)), zmq::send_flags::none);

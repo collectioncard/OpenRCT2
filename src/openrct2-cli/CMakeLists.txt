@@ -16,11 +16,3 @@ if (EMSCRIPTEN)
 endif ()
 target_link_libraries(openrct2-cli libopenrct2 Threads::Threads)
 target_link_platform_libraries(openrct2-cli)
-
-
-target_include_directories(openrct2-cli SYSTEM PRIVATE "/opt/homebrew/include")
-include_directories("/opt/homebrew/include")
-target_link_libraries(openrct2-cli libzmq)
-
-target_include_directories(openrct2-cli SYSTEM PRIVATE ${LIBZMQ_INCLUDE_DIR})
-target_link_libraries(openrct2-cli /usr/local/lib/libzmq.a)
