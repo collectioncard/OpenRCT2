@@ -178,7 +178,7 @@ target_link_libraries(libopenrct2 Threads::Threads)
 # Locate libzmq (ZeroMQ) and its include dir. Prefer Homebrew locations on macOS,
 # but search common system locations as fallback. This avoids hardcoding / duplicate
 # linking to libzmq which caused linker failures on macOS (duplicate/ambiguous libs).
-find_path(LIBZMQ_INCLUDE_DIR NAMES zmq.h
+find_path(LIBZMQ_INCLUDE_DIR NAMES zmq.hpp
     PATHS /opt/homebrew/include /usr/local/include /usr/include
     NO_DEFAULT_PATH)
 

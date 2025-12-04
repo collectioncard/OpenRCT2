@@ -7,7 +7,7 @@
  * OpenRCT2 is licensed under the GNU General Public License version 3.
  *****************************************************************************/
 
-#define ZMQ_BUILD_DRAFT_API
+//#define ZMQ_BUILD_DRAFT_API
 #include "zmq.hpp"
 
 using namespace std::chrono_literals;
@@ -16,7 +16,7 @@ using namespace std::chrono_literals;
 zmq::context_t context{1};
 
 // construct a REP (reply) socket and bind to interface
-zmq::socket_t socket{context, zmq::socket_type::client};
+zmq::socket_t socket{context, zmq::socket_type::dealer};
 
 #ifdef __EMSCRIPTEN__
     #include <cassert>
@@ -114,6 +114,89 @@ zmq::socket_t socket{context, zmq::socket_type::client};
 #include <memory>
 #include <string>
 #include <sstream>
+#include <iostream>
+#include <iomanip>
+#include <algorithm>
+
+// New: verbose send helper to aid debugging of socket sends
+namespace {
+    static void VerboseSend(zmq::socket_t &sock, const std::string &address, const std::string &data)
+    {
+        try
+        {
+            sock.connect(address);
+            bool sent = false;
+            try
+            {
+                sent = static_cast<bool>(sock.send(zmq::buffer(data), zmq::send_flags::none));
+            }
+            catch (const std::exception &e)
+            {
+                std::cout << "[ZMQ SEND] exception while sending to " << address << ": " << e.what() << "\n";
+            }
+
+            if (sent)
+            {
+                std::cout << "[ZMQ SEND] success: sent " << data.size() << " bytes to " << address << "\n";
+            }
+            else
+            {
+                std::cout << "[ZMQ SEND] failed to send to " << address << " (send returned false)\n";
+            }
+
+            const size_t maxPreview = 200;
+            const size_t show = std::min(data.size(), maxPreview);
+            bool printable = true;
+            for (size_t i = 0; i < show; ++i)
+            {
+                unsigned char c = static_cast<unsigned char>(data[i]);
+                if (c < 32 && c != '\n' && c != '\r' && c != '\t')
+                {
+                    printable = false;
+                    break;
+                }
+            }
+
+            if (show > 0)
+            {
+                if (printable)
+                {
+                    std::cout << "[ZMQ SEND] data preview (first " << show << " bytes)\n";
+                    std::cout << "----\n";
+                    std::cout << data.substr(0, show) << (data.size() > show ? "...\n" : "\n");
+                    std::cout << "----\n";
+                }
+                else
+                {
+                    std::ostringstream oss;
+                    oss << std::hex << std::setfill('0');
+                    for (size_t i = 0; i < show; ++i)
+                    {
+                        oss << std::setw(2) << static_cast<int>(static_cast<unsigned char>(data[i]));
+                        if (i + 1 < show)
+                            oss << ' ';
+                    }
+                    if (data.size() > show)
+                        oss << " ...";
+                    std::cout << "[ZMQ SEND] data (hex, first " << show << " bytes): " << oss.str() << "\n";
+                }
+            }
+
+            try
+            {
+                //sock.disconnect(address);
+            }
+            catch (const std::exception &e)
+            {
+                std::cout << "[ZMQ SEND] exception while disconnecting from " << address << ": " << e.what() << "\n";
+            }
+        }
+        catch (const std::exception &e)
+        {
+            std::cout << "[ZMQ SEND] unexpected exception: " << e.what() << "\n";
+        }
+    }
+} // anonymous namespace
 
 using namespace OpenRCT2;
 using namespace OpenRCT2::Drawing;
@@ -1319,9 +1402,7 @@ namespace OpenRCT2
 					std::cout<<"trying to send\n";
 				        ;
 				    Json::StyledWriter styledWriter;
-					socket.connect(portAddress2);
-					socket.send(zmq::buffer(styledWriter.write(event)), zmq::send_flags::none);
-					socket.disconnect(portAddress2);
+					VerboseSend(socket, portAddress2, styledWriter.write(event));
 				}
 				//std::cout<<"sent json\n";
 				
@@ -1521,16 +1602,16 @@ namespace OpenRCT2
 
                 auto windowManager = _uiContext->GetWindowManager();
                 windowManager->OpenIntent(&intent);
-				
-				socket.connect(portAddress2);
-				const std::string error{e.what()};
-				socket.send(zmq::buffer(error), zmq::send_flags::none);
-				socket.disconnect(portAddress2);
-				//std::cout<<"sent error\n";
-				
-            }
-            catch (const UnsupportedRideTypeException& e)
-            {
+
+				{
+                    const std::string error{e.what()};
+                    VerboseSend(socket, portAddress2, error);
+                }
+                 //std::cout<<"sent error\n";
+
+             }
+             catch (const UnsupportedRideTypeException& e)
+             {
                 Console::Error::WriteLine("Unable to open park: unsupported ride types");
 				std::cout <<" error loading C:" << e.what() << "\n";
 
@@ -1540,16 +1621,15 @@ namespace OpenRCT2
                     SetActiveScene(GetTitleScene());
                 }
                 auto windowManager = _uiContext->GetWindowManager();
-				windowManager->ShowError(STR_FILE_CONTAINS_UNSUPPORTED_RIDE_TYPES, kStringIdNone, {});
-				
-				socket.connect(portAddress2);
-				const std::string error{e.what()};
-				socket.send(zmq::buffer(error), zmq::send_flags::none);
-				socket.disconnect(portAddress2);
-				//std::cout<<"sent error\n";				
-            }
-            catch (const UnsupportedVersionException& e)
-            {
+                windowManager->ShowError(STR_FILE_CONTAINS_UNSUPPORTED_RIDE_TYPES, kStringIdNone, {});
+
+                {
+                    const std::string error{e.what()};
+                    VerboseSend(socket, portAddress2, error);
+                }
+             }
+             catch (const UnsupportedVersionException& e)
+             {
                 Console::Error::WriteLine("Unable to open park: unsupported park version");
 				std::cout <<" error loading B:" << e.what() << "\n";
 
@@ -1567,29 +1647,28 @@ namespace OpenRCT2
                 else*/
                 {
                     if (e.MinVersion == e.TargetVersion)
-                    {
-                        ft.Add<uint32_t>(e.TargetVersion);
-                        ft.Add<uint32_t>(OpenRCT2::kParkFileCurrentVersion);
-                        windowManager->ShowError(STR_ERROR_PARK_VERSION_TITLE, STR_ERROR_PARK_VERSION_TOO_NEW_MESSAGE_2, ft);
-                    }
-                    else
-                    {
-                        ft.Add<uint32_t>(e.TargetVersion);
-                        ft.Add<uint32_t>(e.MinVersion);
-                        ft.Add<uint32_t>(OpenRCT2::kParkFileCurrentVersion);
-                        windowManager->ShowError(STR_ERROR_PARK_VERSION_TITLE, STR_ERROR_PARK_VERSION_TOO_NEW_MESSAGE, ft);
-                    }
-                }
-				
-				socket.connect(portAddress2);
-				const std::string error{e.what()};
-				socket.send(zmq::buffer(error), zmq::send_flags::none);
-				socket.disconnect(portAddress2);
-				//std::cout<<"sent error\n";
-				
-            }
-            /*catch (const std::exception& e)
-            {
+                     {
+                         ft.Add<uint32_t>(e.TargetVersion);
+                         ft.Add<uint32_t>(OpenRCT2::kParkFileCurrentVersion);
+                         windowManager->ShowError(STR_ERROR_PARK_VERSION_TITLE, STR_ERROR_PARK_VERSION_TOO_NEW_MESSAGE_2, ft);
+                     }
+                     else
+                     {
+                         ft.Add<uint32_t>(e.TargetVersion);
+                         ft.Add<uint32_t>(e.MinVersion);
+                         ft.Add<uint32_t>(OpenRCT2::kParkFileCurrentVersion);
+                         windowManager->ShowError(STR_ERROR_PARK_VERSION_TITLE, STR_ERROR_PARK_VERSION_TOO_NEW_MESSAGE, ft);
+                     }
+                 }
+
+                 {
+                     const std::string error{e.what()};
+                     VerboseSend(socket, portAddress2, error);
+                 }
+
+             }
+             /*catch (const std::exception& e)
+             {
 				std::cout <<" error loading A:" << e.what() << "\n";
 
                 // If loading the SV6 or SV4 failed return to the title screen if requested.
@@ -1599,12 +1678,11 @@ namespace OpenRCT2
                 }
                 Console::Error::WriteLine(e.what());
 				
-				socket.connect(portAddress2);
-				const std::string error{e.what()};
-				socket.send(zmq::buffer(error), zmq::send_flags::none);
-				socket.disconnect(portAddress2);
-				//std::cout<<"sent error\n";
-            }*/
+				{
+                    const std::string error{e.what()};
+                    VerboseSend(socket, portAddress2, error);
+                }
+             }*/
 
             CloseProgress();
             WindowSetFlagForAllViewports(VIEWPORT_FLAG_RENDERING_INHIBITED, false);

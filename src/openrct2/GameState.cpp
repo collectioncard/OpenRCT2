@@ -1,4 +1,3 @@
-#define ZMQ_BUILD_DRAFT_API
 #include "zmq.hpp"
 
 #include "GameState.h"
@@ -50,12 +49,12 @@ using namespace std::chrono_literals;
 static zmq::context_t context_gs{1};
 
 // construct a REP (reply) socket and bind to interface
-static zmq::socket_t socket_gs{context_gs, zmq::socket_type::server};
+static zmq::socket_t socket_gs{context_gs, zmq::socket_type::router};
 static bool firstRun = true;
 static int32_t num_ticks = -1;
 static int32_t current_month = -1;
 
-static zmq::socket_t socket_send{context_gs, zmq::socket_type::client};
+static zmq::socket_t socket_send{context_gs, zmq::socket_type::dealer};
 
 static std::string portAddress1;
 std::string portAddress2;
@@ -664,7 +663,7 @@ namespace OpenRCT2
 						socket_send.connect(portAddress2);
 						socket_send.send(zmq::buffer(jsonString), zmq::send_flags::none);
 						socket_send.disconnect(portAddress2);
-					
+
 						if (visitCounts)
 						{
 						    for (int i = 0; i < n; ++i) {
@@ -1853,9 +1852,9 @@ namespace OpenRCT2
 					socket_send.connect(portAddress2);
 					socket_send.send(zmq::buffer("lost"), zmq::send_flags::none);
 					socket_send.disconnect(portAddress2);
-				
+
 					gGamePaused = true;
-					isPaused = true;
+				 isPaused = true;
 					current_month = -1;
 					num_ticks = -1;
 					break;
@@ -1866,7 +1865,7 @@ namespace OpenRCT2
 					socket_send.connect(portAddress2);
 					socket_send.send(zmq::buffer("won"), zmq::send_flags::none);
 					socket_send.disconnect(portAddress2);
-				
+
 					gGamePaused = true;
 					isPaused = true;
 					current_month = -1;
@@ -1883,7 +1882,7 @@ namespace OpenRCT2
 						socket_send.connect(portAddress2);
 						socket_send.send(zmq::buffer("done month"), zmq::send_flags::none);
 						socket_send.disconnect(portAddress2);
-				
+
 						gGamePaused = true;
 						isPaused = true;
 						current_month = -1;
@@ -2095,140 +2094,140 @@ namespace OpenRCT2
 						auto gameAction2 = RideDemolishAction(ride->id, RIDE_MODIFY_DEMOLISH);
 					    gameAction2.SetFlags(GAME_COMMAND_FLAG_APPLY);
 					    //gameAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
-						//std::cout<<"R3\n";
-						//});				
-					    GameActions::ExecuteNested(&gameAction2);
+							//std::cout<<"R3\n";
+							//});
+						    GameActions::ExecuteNested(&gameAction2);
 
 
 
-					    ClearableItems itemsToClear = 0;
+						    ClearableItems itemsToClear = 0;
 				        itemsToClear |= CLEARABLE_ITEMS::SCENERY_SMALL;
 				        itemsToClear |= CLEARABLE_ITEMS::SCENERY_LARGE;
 				        itemsToClear |= CLEARABLE_ITEMS::SCENERY_FOOTPATH;
 
-						auto mapSizeMaxXY = GetMapSizeMaxXY();
-					    auto range = MapRange(0, 0, mapSizeMaxXY.x, mapSizeMaxXY.y);
+							auto mapSizeMaxXY = GetMapSizeMaxXY();
+						    auto range = MapRange(0, 0, mapSizeMaxXY.x, mapSizeMaxXY.y);
 
-					    auto cAction = ClearAction(range, itemsToClear);
-						auto res = GameActions::Execute(&cAction);
+						    auto cAction = ClearAction(range, itemsToClear);
+							auto res = GameActions::Execute(&cAction);
 
-						//ride_action_modify(&ride, RIDE_MODIFY_DEMOLISH, GAME_COMMAND_FLAG_APPLY);
-			        }
+							//ride_action_modify(&ride, RIDE_MODIFY_DEMOLISH, GAME_COMMAND_FLAG_APPLY);
+				        }
 
-				    std::unique_ptr<TrackDesign> _trackDesign = TrackDesignImport(path_c);
-					if (_trackDesign != nullptr)
-					{
-						//_trackDesign->name = "Test";
-
-						RideId _rideIndex{ RideId::GetNull() };
-
-						auto _currentTrackPieceDirection = static_cast<Direction>(0);
-
-
-						CoordsXYZ trackLoc;
-						GameActions::Result res;
-						bool found2 = false;
-						for (auto &mapCoords : possibleCoords)
+					    std::unique_ptr<TrackDesign> _trackDesign = TrackDesignImport(path_c);
+						if (_trackDesign != nullptr)
 						{
-						    auto surfaceElement = MapGetSurfaceElementAt(mapCoords);
-						    auto mapZ = surfaceElement->GetBaseZ() + TrackDesignGetZPlacement(_trackDesign.get(), GetOrAllocateRide(_rideIndex), { mapCoords, surfaceElement->GetBaseZ() });
-							////std::cout<<"mapz:"<<mapZ<<"\n";
+							//_trackDesign->name = "Test";
 
-						    trackLoc = { mapCoords, mapZ };
-							bool found = false;
-						    for (int32_t i2 = 0; i2 < 7; i2++, trackLoc.z += 8)
-						    {
-						        auto tdAction = TrackDesignAction(CoordsXYZD{ trackLoc.x, trackLoc.y, trackLoc.z, _currentTrackPieceDirection }, *_trackDesign);
-						        tdAction.SetFlags(0);
-						        res = GameActions::Query(&tdAction);
+							RideId _rideIndex{ RideId::GetNull() };
 
-						        // If successful don't keep trying.
-						        // If failure due to no money then increasing height only makes problem worse
-						        if (res.Error != GameActions::Status::Ok) // || res.Error == GameActions::Status::InsufficientFunds)
-						        {
-									//std::cout<<"ERR1\n" << res.GetErrorMessage()<<"\n";
-						        }
-								else
+							auto _currentTrackPieceDirection = static_cast<Direction>(0);
+
+
+							CoordsXYZ trackLoc;
+							GameActions::Result res;
+							bool found2 = false;
+							for (auto &mapCoords : possibleCoords)
+							{
+							    auto surfaceElement = MapGetSurfaceElementAt(mapCoords);
+							    auto mapZ = surfaceElement->GetBaseZ() + TrackDesignGetZPlacement(_trackDesign.get(), GetOrAllocateRide(_rideIndex), { mapCoords, surfaceElement->GetBaseZ() });
+								////std::cout<<"mapz:"<<mapZ<<"\n";
+
+							    trackLoc = { mapCoords, mapZ };
+								bool found = false;
+							    for (int32_t i2 = 0; i2 < 7; i2++, trackLoc.z += 8)
+							    {
+							        auto tdAction = TrackDesignAction(CoordsXYZD{ trackLoc.x, trackLoc.y, trackLoc.z, _currentTrackPieceDirection }, *_trackDesign);
+							        tdAction.SetFlags(0);
+							        res = GameActions::Query(&tdAction);
+
+							        // If successful don't keep trying.
+							        // If failure due to no money then increasing height only makes problem worse
+							        if (res.Error != GameActions::Status::Ok) // || res.Error == GameActions::Status::InsufficientFunds)
+							        {
+										//std::cout<<"ERR1\n" << res.GetErrorMessage()<<"\n";
+							        }
+									else
+									{
+										found = true;
+										break;
+									}
+							    }
+								if (found)
 								{
-									found = true;
+									found2 = true;
 									break;
 								}
-						    }
-							if (found)
-							{
-								found2 = true;
-								break;
 							}
-						}
 
-						if (!found2)
-						{
-							//std::cout<<"stopping\n";
-							return;
-						}
-						//std::cout<<"Placing\n";
-					    auto tdAction = TrackDesignAction({ trackLoc, _currentTrackPieceDirection }, *_trackDesign);
-					    tdAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
-					        if (result->Error == GameActions::Status::Ok)
-					        {
+							if (!found2)
+							{
+								//std::cout<<"stopping\n";
+								return;
+							}
+							//std::cout<<"Placing\n";
+						    auto tdAction = TrackDesignAction({ trackLoc, _currentTrackPieceDirection }, *_trackDesign);
+						    tdAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
+						        if (result->Error == GameActions::Status::Ok)
+						        {
 					            auto rideId = result->GetData<RideId>();
 					            auto getRide = get_ride(rideId);
-								createdRideID = rideId;
+									createdRideID = rideId;
 					            if (getRide != nullptr)
 					            {
 					                //auto intent = Intent(WC_RIDE);
 					                //intent.putExtra(INTENT_EXTRA_RIDE_ID, rideId.ToUnderlying());
 					                //context_open_intent(&intent);
 
-								    RideSetStatusAction gameAction = RideSetStatusAction(rideId, RideStatus::open);
-									gameAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
-										//std::cout<<"CALLBACK\n";
-										//std::cout<<result->GetErrorMessage()<<"\n";
-									});
-								    GameActions::ExecuteNested(&gameAction);
-					            }
-					        }
-					        else
-					        {
-								//std::cout<<"ERR2\n";
-							}
-					    });
-					    res = GameActions::Execute(&tdAction);
+									    RideSetStatusAction gameAction = RideSetStatusAction(rideId, RideStatus::open);
+										gameAction.SetCallback([&](const GameAction*, const GameActions::Result* result) {
+											//std::cout<<"CALLBACK\n";
+											//std::cout<<result->GetErrorMessage()<<"\n";
+										});
+									    GameActions::ExecuteNested(&gameAction);
+						            }
+						        }
+						        else
+						        {
+									//std::cout<<"ERR2\n";
+								}
+						    });
+						    res = GameActions::Execute(&tdAction);
 
-					    // send the reply to the client
-						////std::cout << "Sending back.\n";
-					    //socket.send(zmq::buffer(data), zmq::send_flags::none);
+						    // send the reply to the client
+							////std::cout << "Sending back.\n";
+						    //socket.send(zmq::buffer(data), zmq::send_flags::none);
+						}
+						*/
 					}
-					*/
-				}
-				else if (res["action"] == "load_park_json")
-				{
-					std::string path = res["path"].asString();
-					//const char* path_c = path.c_str();
-			
-					OpenRCT2::GetContext()->LoadParkFromFile("/Users/jcampbell/Library/Application Support/OpenRCT2/scenario/My new scenario.park", false, true);
-				    OpenRCT2::GetContext()->LoadParkFromFile(path, false, true);
-				}
-				else if (res["action"] == "pause")
-				{
-					gGamePaused = true;
-					socket_send.connect(portAddress2);
-					socket_send.send(zmq::buffer("done"), zmq::send_flags::none);
-					socket_send.disconnect(portAddress2);
-					current_month = -1;
-					num_ticks = -1;
-				}
-				else if (res["action"] == "unpause")
-				{
-					gGamePaused = false;
-					socket_send.connect(portAddress2);
-					socket_send.send(zmq::buffer("done"), zmq::send_flags::none);
-					socket_send.disconnect(portAddress2);
-				}
-				else
-				{
-					std::cout<<"received in updatelogic: " << res["action"] << "\n";
-				}
+					else if (res["action"] == "load_park_json")
+					{
+						std::string path = res["path"].asString();
+						//const char* path_c = path.c_str();
+
+						OpenRCT2::GetContext()->LoadParkFromFile("/Users/jcampbell/Library/Application Support/OpenRCT2/scenario/My new scenario.park", false, true);
+					    OpenRCT2::GetContext()->LoadParkFromFile(path, false, true);
+					}
+					else if (res["action"] == "pause")
+					{
+						gGamePaused = true;
+						socket_send.connect(portAddress2);
+						socket_send.send(zmq::buffer("done"), zmq::send_flags::none);
+						socket_send.disconnect(portAddress2);
+						current_month = -1;
+						num_ticks = -1;
+					}
+					else if (res["action"] == "unpause")
+					{
+						gGamePaused = false;
+						socket_send.connect(portAddress2);
+						socket_send.send(zmq::buffer("done"), zmq::send_flags::none);
+						socket_send.disconnect(portAddress2);
+					}
+					else
+					{
+						std::cout<<"received in updatelogic: " << res["action"] << "\n";
+					}
 	        }
 		}
 		else
