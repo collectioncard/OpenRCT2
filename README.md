@@ -1,8 +1,8 @@
 # LLM Plays RollerCoaster Tycoon
 
-This repository contains our modified implementation of the OpenRCT2 gymnasium for machine learning models from the paper *Playing RollerCoaster Tycoon with Reinforcement Learning* (DOI: 10.1145/3723498.3723818), alongside our LLM-based gameplaying agent designed to interact with it.
+This repository contains our modified implementation of the OpenRCT2 gymnasium for machine learning models from the paper *Playing RollerCoaster Tycoon with Reinforcement Learning* (DOI: 10.1145/3723498.3723818), alongside our LLM-based gameplaying agent designed to interact with it. To run our agent, the gymnasium environment needs to be built and run and scenarios must be created within it's scenario editor that are similar to those described in the original paper.
 
-During our use, the gymnasium environment has proved to be tricky to compile and we have only successfully completed it on Mac OS 26 using the instructions below:
+During our use, the gymnasium environment has proved to be tricky to compile and we have only successfully completed it on Mac OS 26 using the instructions below: 
 
 
 ## macOS setup
