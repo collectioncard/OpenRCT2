@@ -41,7 +41,7 @@ Game/build/OpenRCT2.app/Contents/MacOS/OpenRCT2 --version
 ```
 *The codesign step is required for Apple Silicon (and maybe other?) systems in order for the system to allow it to launch.
 
-### 5. Start the LLM agent
+### 3. Start the LLM agent
 
 From `Client/`, with the virtual environment active:
 
